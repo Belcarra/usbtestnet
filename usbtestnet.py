@@ -225,6 +225,7 @@ def main():
     parser.add_argument("--wait-on-error", action="store_true", help="For for manual replug on error")
     parser.add_argument("--no-get", action="store_true", help="Disable the HTTP GET test")
     parser.add_argument("--no-auto-replug", action="store_true", help="Disable the automatic USB Disable")
+    parser.add_argument("--fast", action="store_true", help="Fast")
 
     args = parser.parse_args()
 
@@ -235,6 +236,8 @@ def main():
     if not args.ip or not args.vid or not args.ip:
         parser.print_help()
         exit(0)
+
+    fast, normal, fail = (30, 60, 80) if not args.fast else (10,12,15)
 
     setup_console_logging()
 
@@ -293,7 +296,7 @@ def main():
     # Main test loop
 
     tests_count = disabled_ok = disabled_notok = enabled_ok = enabled_notok = 0
-    net_ok = net_notok = ping_fast = ping_slow = ping_notok = get_ok = get_notok = 0
+    net_ok = net_notok = ping_fast = ping_slow = ping_fail = get_ok = get_notok = 0
     sent_packets_before = recv_packets_before = sent_bytes_before = recv_bytes_before = 0
     sent_packets_after = recv_packets_after = sent_bytes_after = recv_bytes_after = 0
     sent = recv = ''
@@ -350,7 +353,7 @@ def main():
             for i in range(4):
                 stats = netinfo.get_stats()
                 iface = netinfo.get_name()
-                bytes_sent, bytes_recv, packets_sent, packets_recv, dropped_sent, dropped_recv = stats if stats else (0,0,0,0)
+                bytes_sent, bytes_recv, packets_sent, packets_recv, dropped_sent, dropped_recv = stats if stats else (0,0,0,0,0,0)
                 if stats:
                     #logging.info(f"[{tests_count}:{time()-startTime:02.0f}] {iface}: {args.ip} " +
                     #        f"activity: {bytes_sent}:{bytes_recv} {packets_sent}:{packets_recv} {dropped_sent}:{dropped_recv} [{i+1}]")
@@ -365,13 +368,13 @@ def main():
 
             # Ping until success, up to 10 tries
             startPingTime = time()
-            for i in range(80):
+            for i in range(fail):
                 if ping_device(args.ip, timeout=0.2, count=1, tests_count=tests_count):
                     logging.info(f"[{tests_count}:{time()-startTime:02.0f}:{time()-networkStartTime:.0f}] {iface}: Ping {args.ip} [{i+1}]")
                     # Do two extra for confirmation
                     ping_device(args.ip, timeout=0.2, count=1)
                     ping_device(args.ip, timeout=0.2, count=1)
-                    if time()-startTime < 30:
+                    if time()-startTime < fast:
                         ping_fast += 1
                     else:
                         ping_slow += 1
@@ -385,7 +388,7 @@ def main():
                     logging.info(f"[{tests_count}:{time()-startTime:02.0f}:{time()-networkStartTime:02.0f}]" + 
                         f"activity: {bytes_sent}:{bytes_recv} {packets_sent}:{packets_recv} {dropped_sent}:{dropped_recv}",)
             else:
-                ping_notok += 1
+                ping_fail += 1
                 logging.error(f"[{tests_count}:{time()-startTime:02.0f}:{time()-networkStartTime:.0f}] {iface} Ping to {args.ip} failed.")
                 sleep(10)
                 break
@@ -416,7 +419,7 @@ def main():
             f"disable: {disabled_ok}:{disabled_notok} " +
             f"enable: {enabled_ok}:{enabled_notok} " +
             f"net: {net_ok}:{net_notok} " +
-            f"ping: {ping_fast}:{ping_slow}:{ping_notok} " +
+            f"ping: {ping_fast}:{ping_slow}:{ping_fail} " +
             f"get: {get_ok}:{get_notok} " +
             f"activity: {bytes_sent}:{bytes_recv} {packets_sent}:{packets_recv} {dropped_sent}:{dropped_recv}",
             )
