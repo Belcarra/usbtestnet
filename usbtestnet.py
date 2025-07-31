@@ -35,8 +35,53 @@ except ImportError:
     print("This script requires the 'requests' library. Install with: pip install requests")
     sys.exit(1)
 
-# Helper: run a command and return stdout
+
+import os
+import platform
+import subprocess
+import logging
+
+def get_devcon_path():
+    # Map platform.machine() to your bin folder names
+    arch = platform.machine().lower()
+    if arch == "amd64":
+        folder = "x64"
+    elif arch == "arm64":
+        folder = "arm64"
+    else:
+        folder = arch  # if you ever add others
+    here = os.path.dirname(__file__)
+    path = os.path.join(here, "bin", folder, "devcon.exe")
+    if not os.path.isfile(path):
+        raise FileNotFoundError(f"devcon.exe not found at {path}")
+    return path
+
 def run_cmd(cmd):
+    """
+    Runs any shell command.  If it starts with "devcon", we swap in the correct
+    embedded devcon.exe under bin/{arch}.
+    """
+    # detect a devcon invocation
+    parts = cmd.strip().split(None, 1)
+    if parts[0].lower() == "devcon":
+        rest = parts[1] if len(parts) > 1 else ""
+        devcon = get_devcon_path()
+        cmd = f'"{devcon}" {rest}'
+
+    try:
+        logging.debug(f"Running command: {cmd}")
+        output = subprocess.check_output(
+            cmd, shell=True, encoding='utf-8', stderr=subprocess.STDOUT
+        )
+        return output
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Command failed: {e.output}")
+        return ""
+
+
+
+# Helper: run a command and return stdout
+def old_run_cmd(cmd):
     try:
         logging.debug(f"Running command: {cmd}")
         output = subprocess.check_output(cmd, shell=True, encoding='utf-8', stderr=subprocess.STDOUT)
@@ -241,9 +286,9 @@ def main():
 
     setup_console_logging()
 
-    if shutil.which("devcon") is None:
-        logging.error("devcon.exe not found in PATH. Please install it from the Windows Driver Kit.")
-        sys.exit(1)
+    #if shutil.which("devcon") is None:
+    #    logging.error("devcon.exe not found in PATH. Please install it from the Windows Driver Kit.")
+    #    sys.exit(1)
 
     #setup_logging(args.logfile)
 
